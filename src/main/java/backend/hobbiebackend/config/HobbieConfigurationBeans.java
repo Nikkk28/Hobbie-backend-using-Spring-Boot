@@ -11,13 +11,11 @@ import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
 public class HobbieConfigurationBeans {
     @Bean
     public PasswordEncoder createPasswordEncoder() {
-        return new Pbkdf2PasswordEncoder();
+        return new Pbkdf2PasswordEncoder("mySecretKey", 185000, 256, Pbkdf2PasswordEncoder.SecretKeyFactoryAlgorithm.PBKDF2WithHmacSHA256);
     }
 
     @Bean
     public ModelMapper createModelMapper() {
         return new ModelMapper();
     }
-
-
 }
