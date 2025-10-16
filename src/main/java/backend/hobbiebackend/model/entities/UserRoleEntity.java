@@ -2,10 +2,7 @@ package backend.hobbiebackend.model.entities;
 
 import backend.hobbiebackend.model.entities.enums.UserRoleEnum;
 
-import javax.persistence.Entity;
-import javax.persistence.EnumType;
-import javax.persistence.Enumerated;
-import javax.persistence.Table;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "roles")

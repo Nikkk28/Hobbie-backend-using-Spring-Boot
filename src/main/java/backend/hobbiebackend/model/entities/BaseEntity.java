@@ -1,6 +1,6 @@
 package backend.hobbiebackend.model.entities;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 
 @MappedSuperclass
 public abstract class BaseEntity {
