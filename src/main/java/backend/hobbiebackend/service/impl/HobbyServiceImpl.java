@@ -6,16 +6,14 @@ import backend.hobbiebackend.model.entities.enums.CategoryNameEnum;
 import backend.hobbiebackend.model.entities.enums.LocationEnum;
 import backend.hobbiebackend.model.repostiory.HobbyRepository;
 import backend.hobbiebackend.service.CategoryService;
+import backend.hobbiebackend.service.FileStorageService;
 import backend.hobbiebackend.service.HobbyService;
 import backend.hobbiebackend.service.LocationService;
 import backend.hobbiebackend.service.UserService;
-import com.cloudinary.Cloudinary;
-import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.*;
 
 @Service
@@ -25,15 +23,19 @@ public class HobbyServiceImpl implements HobbyService {
     private final CategoryService categoryService;
     private final UserService userService;
     private final LocationService locationService;
-    private final Cloudinary cloudinary;
+    private final FileStorageService fileStorageService;
 
     @Autowired
-    public HobbyServiceImpl(HobbyRepository hobbyRepository, CategoryService categoryService, UserService userService, LocationService locationService, Cloudinary cloudinary) {
+    public HobbyServiceImpl(HobbyRepository hobbyRepository,
+                            CategoryService categoryService,
+                            UserService userService,
+                            LocationService locationService,
+                            FileStorageService fileStorageService) {
         this.hobbyRepository = hobbyRepository;
         this.categoryService = categoryService;
         this.userService = userService;
         this.locationService = locationService;
-        this.cloudinary = cloudinary;
+        this.fileStorageService = fileStorageService;
     }
 
     @Override
@@ -46,13 +48,8 @@ public class HobbyServiceImpl implements HobbyService {
         }
     }
 
-    @SneakyThrows
     @Override
-    public void saveUpdatedHobby(Hobby hobby) {
-        Optional<Hobby> byId = this.hobbyRepository.findById(hobby.getId());
-        if (byId.isPresent()) {
-            deleteResourcesById(byId.get());
-        }
+    public void saveUpdatedHobby(Hobby hobby) throws Exception {
         this.hobbyRepository.save(hobby);
     }
 
@@ -60,26 +57,27 @@ public class HobbyServiceImpl implements HobbyService {
     public boolean deleteHobby(long id) throws Exception {
         Optional<Hobby> byId = this.hobbyRepository.findById(id);
         if (byId.isPresent()) {
-            deleteResourcesById(byId.get());
-            BusinessOwner business = this.userService.findBusinessByUsername(byId.get().getCreator());
-            business.getHobby_offers().remove(byId.get());
-            this.userService.findAndRemoveHobbyFromClientsRecords(byId.get());
+            Hobby hobby = byId.get();
+
+            // Delete files
+            try {
+                fileStorageService.deleteFile(hobby.getProfileImg_id());
+                fileStorageService.deleteFile(hobby.getGalleryImg1_id());
+                fileStorageService.deleteFile(hobby.getGalleryImg2_id());
+                fileStorageService.deleteFile(hobby.getGalleryImg3_id());
+            } catch (Exception e) {
+                // Log error but continue with deletion
+                System.err.println("Error deleting files: " + e.getMessage());
+            }
+
+            BusinessOwner business = this.userService.findBusinessByUsername(hobby.getCreator());
+            business.getHobby_offers().remove(hobby);
+            this.userService.findAndRemoveHobbyFromClientsRecords(hobby);
             this.hobbyRepository.deleteById(id);
             return true;
         }
         return false;
     }
-
-    private void deleteResourcesById(Hobby byId) throws Exception {
-        String profileImgId = byId.getProfileImg_id();
-        String galleryImgId1 = byId.getGalleryImg1_id();
-        String galleryImgId2 = byId.getGalleryImg2_id();
-        String galleryImgId3 = byId.getGalleryImg3_id();
-
-        cloudinary.api().deleteResources(Arrays.asList(profileImgId, galleryImgId1, galleryImgId2, galleryImgId3),
-                Map.of("invalidate", true));
-    }
-
 
     @Override
     public Set<Hobby> findHobbyMatches(String username) {
@@ -101,7 +99,6 @@ public class HobbyServiceImpl implements HobbyService {
             testCategoryResults.add(currentUserAppClient.getTestResults().getCategorySix());
 
             if (allByLocation.size() > 0) {
-
                 for (int i = 0; i < 10; i++) {
                     int randomIndex = rand.nextInt(allByLocation.size());
                     Hobby randomHobby = allByLocation.get(randomIndex);
@@ -177,6 +174,4 @@ public class HobbyServiceImpl implements HobbyService {
     public void createHobby(Hobby offer) {
         this.hobbyRepository.save(offer);
     }
-
 }
-

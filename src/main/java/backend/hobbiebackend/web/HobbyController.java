@@ -1,16 +1,16 @@
 package backend.hobbiebackend.web;
 
-import backend.hobbiebackend.model.dto.HobbyInfoDto;
-import backend.hobbiebackend.model.dto.HobbyInfoUpdateDto;
 import backend.hobbiebackend.model.entities.*;
 import backend.hobbiebackend.service.CategoryService;
+import backend.hobbiebackend.service.FileStorageService;
 import backend.hobbiebackend.service.HobbyService;
 import backend.hobbiebackend.service.LocationService;
 import backend.hobbiebackend.service.UserService;
+import backend.hobbiebackend.model.entities.enums.CategoryNameEnum;
+import backend.hobbiebackend.model.entities.enums.LocationEnum;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,7 +18,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
 
@@ -32,7 +34,7 @@ public class HobbyController {
     private final CategoryService categoryService;
     private final LocationService locationService;
     private final UserService userService;
-    private final ModelMapper modelMapper;
+    private final FileStorageService fileStorageService;
 
     @Autowired
     public HobbyController(
@@ -40,51 +42,162 @@ public class HobbyController {
             CategoryService categoryService,
             LocationService locationService,
             UserService userService,
-            ModelMapper modelMapper) {
+            FileStorageService fileStorageService) {
         this.hobbyService = hobbyService;
         this.categoryService = categoryService;
         this.locationService = locationService;
         this.userService = userService;
-        this.modelMapper = modelMapper;
+        this.fileStorageService = fileStorageService;
     }
 
-    @PostMapping
+    @PostMapping(consumes = "multipart/form-data")
     @PreAuthorize("hasRole('BUSINESS_USER')")
     @Operation(
             summary = "Create new hobby",
             description = "Only business users can create hobbies",
             security = @SecurityRequirement(name = "bearerAuth")
     )
-    public ResponseEntity<?> saveHobby(@RequestBody HobbyInfoDto info) {
+    public ResponseEntity<?> saveHobby(
+            @RequestParam("name") String name,
+            @RequestParam("slogan") String slogan,
+            @RequestParam("intro") String intro,
+            @RequestParam("description") String description,
+            @RequestParam("category") CategoryNameEnum category,
+            @RequestParam("creator") String creator,
+            @RequestParam("price") BigDecimal price,
+            @RequestParam("location") LocationEnum location,
+            @RequestParam("contactInfo") String contactInfo,
+            @RequestParam("profileImg") MultipartFile profileImg,
+            @RequestParam("galleryImg1") MultipartFile galleryImg1,
+            @RequestParam("galleryImg2") MultipartFile galleryImg2,
+            @RequestParam("galleryImg3") MultipartFile galleryImg3) {
         try {
-            // Get authenticated user
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             String username = auth.getName();
 
-            // Verify the creator matches authenticated user
-            if (!username.equals(info.getCreator())) {
+            if (!username.equals(creator)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body("You can only create hobbies for your own business");
             }
 
-            Hobby offer = this.modelMapper.map(info, Hobby.class);
-            Category category = this.categoryService.findByName(info.getCategory());
-            Location location = this.locationService.getLocationByName(info.getLocation());
-            offer.setLocation(location);
-            offer.setCategory(category);
+            // Store files
+            String profileImgName = fileStorageService.storeFile(profileImg);
+            String galleryImg1Name = fileStorageService.storeFile(galleryImg1);
+            String galleryImg2Name = fileStorageService.storeFile(galleryImg2);
+            String galleryImg3Name = fileStorageService.storeFile(galleryImg3);
 
-            BusinessOwner business = this.userService.findBusinessByUsername(info.getCreator());
-            Set<Hobby> hobby_offers = business.getHobby_offers();
-            hobby_offers.add(offer);
-            business.setHobby_offers(hobby_offers);
+            // Create hobby
+            Hobby hobby = new Hobby();
+            hobby.setName(name);
+            hobby.setSlogan(slogan);
+            hobby.setIntro(intro);
+            hobby.setDescription(description);
+            hobby.setCreator(creator);
+            hobby.setPrice(price);
+            hobby.setContactInfo(contactInfo);
+            hobby.setProfileImgUrl("/api/files/" + profileImgName);
+            hobby.setGalleryImgUrl1("/api/files/" + galleryImg1Name);
+            hobby.setGalleryImgUrl2("/api/files/" + galleryImg2Name);
+            hobby.setGalleryImgUrl3("/api/files/" + galleryImg3Name);
+            hobby.setProfileImg_id(profileImgName);
+            hobby.setGalleryImg1_id(galleryImg1Name);
+            hobby.setGalleryImg2_id(galleryImg2Name);
+            hobby.setGalleryImg3_id(galleryImg3Name);
 
-            this.hobbyService.createHobby(offer);
-            this.userService.saveUpdatedUser(business);
+            Category cat = categoryService.findByName(category);
+            Location loc = locationService.getLocationByName(location);
+            hobby.setCategory(cat);
+            hobby.setLocation(loc);
 
-            return ResponseEntity.status(HttpStatus.CREATED).body(offer);
+            BusinessOwner business = userService.findBusinessByUsername(creator);
+            Set<Hobby> hobbyOffers = business.getHobby_offers();
+            hobbyOffers.add(hobby);
+            business.setHobby_offers(hobbyOffers);
+
+            hobbyService.createHobby(hobby);
+            userService.saveUpdatedUser(business);
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(hobby);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Failed to create hobby: " + e.getMessage());
+        }
+    }
+
+    @PutMapping(value = "/{id}", consumes = "multipart/form-data")
+    @PreAuthorize("hasRole('BUSINESS_USER')")
+    @Operation(
+            summary = "Update hobby",
+            description = "Only business users can update their hobbies",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<?> updateHobby(
+            @PathVariable Long id,
+            @RequestParam("name") String name,
+            @RequestParam("slogan") String slogan,
+            @RequestParam("intro") String intro,
+            @RequestParam("description") String description,
+            @RequestParam("category") CategoryNameEnum category,
+            @RequestParam("price") BigDecimal price,
+            @RequestParam("location") LocationEnum location,
+            @RequestParam("contactInfo") String contactInfo,
+            @RequestParam(value = "profileImg", required = false) MultipartFile profileImg,
+            @RequestParam(value = "galleryImg1", required = false) MultipartFile galleryImg1,
+            @RequestParam(value = "galleryImg2", required = false) MultipartFile galleryImg2,
+            @RequestParam(value = "galleryImg3", required = false) MultipartFile galleryImg3) {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            String username = auth.getName();
+
+            Hobby existingHobby = hobbyService.findHobbieById(id);
+            if (!existingHobby.getCreator().equals(username)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body("You can only update your own hobbies");
+            }
+
+            // Update images if new ones provided
+            if (profileImg != null && !profileImg.isEmpty()) {
+                fileStorageService.deleteFile(existingHobby.getProfileImg_id());
+                String newFileName = fileStorageService.storeFile(profileImg);
+                existingHobby.setProfileImgUrl("/api/files/" + newFileName);
+                existingHobby.setProfileImg_id(newFileName);
+            }
+            if (galleryImg1 != null && !galleryImg1.isEmpty()) {
+                fileStorageService.deleteFile(existingHobby.getGalleryImg1_id());
+                String newFileName = fileStorageService.storeFile(galleryImg1);
+                existingHobby.setGalleryImgUrl1("/api/files/" + newFileName);
+                existingHobby.setGalleryImg1_id(newFileName);
+            }
+            if (galleryImg2 != null && !galleryImg2.isEmpty()) {
+                fileStorageService.deleteFile(existingHobby.getGalleryImg2_id());
+                String newFileName = fileStorageService.storeFile(galleryImg2);
+                existingHobby.setGalleryImgUrl2("/api/files/" + newFileName);
+                existingHobby.setGalleryImg2_id(newFileName);
+            }
+            if (galleryImg3 != null && !galleryImg3.isEmpty()) {
+                fileStorageService.deleteFile(existingHobby.getGalleryImg3_id());
+                String newFileName = fileStorageService.storeFile(galleryImg3);
+                existingHobby.setGalleryImgUrl3("/api/files/" + newFileName);
+                existingHobby.setGalleryImg3_id(newFileName);
+            }
+
+            existingHobby.setName(name);
+            existingHobby.setSlogan(slogan);
+            existingHobby.setIntro(intro);
+            existingHobby.setDescription(description);
+            existingHobby.setPrice(price);
+            existingHobby.setContactInfo(contactInfo);
+
+            Category cat = categoryService.findByName(category);
+            Location loc = locationService.getLocationByName(location);
+            existingHobby.setCategory(cat);
+            existingHobby.setLocation(loc);
+
+            hobbyService.saveUpdatedHobby(existingHobby);
+            return ResponseEntity.ok(existingHobby);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to update hobby: " + e.getMessage());
         }
     }
 
@@ -98,13 +211,12 @@ public class HobbyController {
     public ResponseEntity<Boolean> isHobbySaved(
             @RequestParam Long id,
             @RequestParam String username) {
-        // Verify the username matches authenticated user
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (!auth.getName().equals(username)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
-        boolean isSaved = this.hobbyService.isHobbySaved(id, username);
+        boolean isSaved = hobbyService.isHobbySaved(id, username);
         return ResponseEntity.ok(isSaved);
     }
 
@@ -117,7 +229,7 @@ public class HobbyController {
     )
     public ResponseEntity<Hobby> getHobbyDetails(@PathVariable Long id) {
         try {
-            Hobby hobby = this.hobbyService.findHobbieById(id);
+            Hobby hobby = hobbyService.findHobbieById(id);
             return ResponseEntity.ok(hobby);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
@@ -134,7 +246,6 @@ public class HobbyController {
     public ResponseEntity<?> save(
             @RequestParam Long id,
             @RequestParam String username) {
-        // Verify the username matches authenticated user
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (!auth.getName().equals(username)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -142,8 +253,8 @@ public class HobbyController {
         }
 
         try {
-            Hobby hobby = this.hobbyService.findHobbieById(id);
-            boolean isSaved = this.hobbyService.saveHobbyForClient(hobby, username);
+            Hobby hobby = hobbyService.findHobbieById(id);
+            boolean isSaved = hobbyService.saveHobbyForClient(hobby, username);
 
             if (!isSaved) {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -167,7 +278,6 @@ public class HobbyController {
     public ResponseEntity<?> removeHobby(
             @RequestParam Long id,
             @RequestParam String username) {
-        // Verify the username matches authenticated user
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (!auth.getName().equals(username)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -175,8 +285,8 @@ public class HobbyController {
         }
 
         try {
-            Hobby hobby = this.hobbyService.findHobbieById(id);
-            boolean isRemoved = this.hobbyService.removeHobbyForClient(hobby, username);
+            Hobby hobby = hobbyService.findHobbieById(id);
+            boolean isRemoved = hobbyService.removeHobbyForClient(hobby, username);
 
             if (!isRemoved) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -190,40 +300,6 @@ public class HobbyController {
         }
     }
 
-    @PutMapping
-    @PreAuthorize("hasRole('BUSINESS_USER')")
-    @Operation(
-            summary = "Update hobby",
-            description = "Only business users can update their hobbies",
-            security = @SecurityRequirement(name = "bearerAuth")
-    )
-    public ResponseEntity<?> updateHobby(@RequestBody HobbyInfoUpdateDto info) {
-        try {
-            // Get authenticated user
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            String username = auth.getName();
-
-            // Verify the hobby belongs to this business
-            Hobby existingHobby = this.hobbyService.findHobbieById(info.getId());
-            if (!existingHobby.getCreator().equals(username)) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body("You can only update your own hobbies");
-            }
-
-            Hobby offer = this.modelMapper.map(info, Hobby.class);
-            Category category = this.categoryService.findByName(info.getCategory());
-            Location location = this.locationService.getLocationByName(info.getLocation());
-            offer.setLocation(location);
-            offer.setCategory(category);
-
-            this.hobbyService.saveUpdatedHobby(offer);
-            return ResponseEntity.ok(offer);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Failed to update hobby: " + e.getMessage());
-        }
-    }
-
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('BUSINESS_USER')")
     @Operation(
@@ -233,18 +309,16 @@ public class HobbyController {
     )
     public ResponseEntity<?> deleteHobby(@PathVariable Long id) {
         try {
-            // Get authenticated user
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             String username = auth.getName();
 
-            // Verify the hobby belongs to this business
-            Hobby hobby = this.hobbyService.findHobbieById(id);
+            Hobby hobby = hobbyService.findHobbieById(id);
             if (!hobby.getCreator().equals(username)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body("You can only delete your own hobbies");
             }
 
-            boolean isRemoved = this.hobbyService.deleteHobby(id);
+            boolean isRemoved = hobbyService.deleteHobby(id);
             if (!isRemoved) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body("Hobby not found");
@@ -265,7 +339,6 @@ public class HobbyController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     public ResponseEntity<?> savedHobbies(@RequestParam String username) {
-        // Verify the username matches authenticated user
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (!auth.getName().equals(username)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -273,8 +346,8 @@ public class HobbyController {
         }
 
         try {
-            AppClient appClient = this.userService.findAppClientByUsername(username);
-            List<Hobby> savedHobbies = this.hobbyService.findSavedHobbies(appClient);
+            AppClient appClient = userService.findAppClientByUsername(username);
+            List<Hobby> savedHobbies = hobbyService.findSavedHobbies(appClient);
             return ResponseEntity.ok(savedHobbies);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
