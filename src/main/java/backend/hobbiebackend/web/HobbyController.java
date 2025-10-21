@@ -2,10 +2,10 @@ package backend.hobbiebackend.web;
 
 import backend.hobbiebackend.model.entities.*;
 import backend.hobbiebackend.service.CategoryService;
-import backend.hobbiebackend.service.FileStorageService;
 import backend.hobbiebackend.service.HobbyService;
 import backend.hobbiebackend.service.LocationService;
 import backend.hobbiebackend.service.UserService;
+import backend.hobbiebackend.service.impl.S3FileStorageServiceImpl;
 import backend.hobbiebackend.model.entities.enums.CategoryNameEnum;
 import backend.hobbiebackend.model.entities.enums.LocationEnum;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,7 +34,7 @@ public class HobbyController {
     private final CategoryService categoryService;
     private final LocationService locationService;
     private final UserService userService;
-    private final FileStorageService fileStorageService;
+    private final S3FileStorageServiceImpl s3FileStorageService;
 
     @Autowired
     public HobbyController(
@@ -42,12 +42,12 @@ public class HobbyController {
             CategoryService categoryService,
             LocationService locationService,
             UserService userService,
-            FileStorageService fileStorageService) {
+            S3FileStorageServiceImpl s3FileStorageService) {
         this.hobbyService = hobbyService;
         this.categoryService = categoryService;
         this.locationService = locationService;
         this.userService = userService;
-        this.fileStorageService = fileStorageService;
+        this.s3FileStorageService = s3FileStorageService;
     }
 
     @PostMapping(consumes = "multipart/form-data")
@@ -80,11 +80,11 @@ public class HobbyController {
                         .body("You can only create hobbies for your own business");
             }
 
-            // Store files
-            String profileImgName = fileStorageService.storeFile(profileImg);
-            String galleryImg1Name = fileStorageService.storeFile(galleryImg1);
-            String galleryImg2Name = fileStorageService.storeFile(galleryImg2);
-            String galleryImg3Name = fileStorageService.storeFile(galleryImg3);
+            // Store files in S3
+            String profileImgName = s3FileStorageService.storeFile(profileImg);
+            String galleryImg1Name = s3FileStorageService.storeFile(galleryImg1);
+            String galleryImg2Name = s3FileStorageService.storeFile(galleryImg2);
+            String galleryImg3Name = s3FileStorageService.storeFile(galleryImg3);
 
             // Create hobby
             Hobby hobby = new Hobby();
@@ -95,10 +95,14 @@ public class HobbyController {
             hobby.setCreator(creator);
             hobby.setPrice(price);
             hobby.setContactInfo(contactInfo);
+
+            // Set S3 URLs
             hobby.setProfileImgUrl(s3FileStorageService.getS3Url(profileImgName));
-            hobby.setGalleryImgUrl1("/api/files/" + galleryImg1Name);
-            hobby.setGalleryImgUrl2("/api/files/" + galleryImg2Name);
-            hobby.setGalleryImgUrl3("/api/files/" + galleryImg3Name);
+            hobby.setGalleryImgUrl1(s3FileStorageService.getS3Url(galleryImg1Name));
+            hobby.setGalleryImgUrl2(s3FileStorageService.getS3Url(galleryImg2Name));
+            hobby.setGalleryImgUrl3(s3FileStorageService.getS3Url(galleryImg3Name));
+
+            // Set S3 file IDs for deletion later
             hobby.setProfileImg_id(profileImgName);
             hobby.setGalleryImg1_id(galleryImg1Name);
             hobby.setGalleryImg2_id(galleryImg2Name);
@@ -157,27 +161,27 @@ public class HobbyController {
 
             // Update images if new ones provided
             if (profileImg != null && !profileImg.isEmpty()) {
-                fileStorageService.deleteFile(existingHobby.getProfileImg_id());
-                String newFileName = fileStorageService.storeFile(profileImg);
-                existingHobby.setProfileImgUrl("/api/files/" + newFileName);
+                s3FileStorageService.deleteFile(existingHobby.getProfileImg_id());
+                String newFileName = s3FileStorageService.storeFile(profileImg);
+                existingHobby.setProfileImgUrl(s3FileStorageService.getS3Url(newFileName));
                 existingHobby.setProfileImg_id(newFileName);
             }
             if (galleryImg1 != null && !galleryImg1.isEmpty()) {
-                fileStorageService.deleteFile(existingHobby.getGalleryImg1_id());
-                String newFileName = fileStorageService.storeFile(galleryImg1);
-                existingHobby.setGalleryImgUrl1("/api/files/" + newFileName);
+                s3FileStorageService.deleteFile(existingHobby.getGalleryImg1_id());
+                String newFileName = s3FileStorageService.storeFile(galleryImg1);
+                existingHobby.setGalleryImgUrl1(s3FileStorageService.getS3Url(newFileName));
                 existingHobby.setGalleryImg1_id(newFileName);
             }
             if (galleryImg2 != null && !galleryImg2.isEmpty()) {
-                fileStorageService.deleteFile(existingHobby.getGalleryImg2_id());
-                String newFileName = fileStorageService.storeFile(galleryImg2);
-                existingHobby.setGalleryImgUrl2("/api/files/" + newFileName);
+                s3FileStorageService.deleteFile(existingHobby.getGalleryImg2_id());
+                String newFileName = s3FileStorageService.storeFile(galleryImg2);
+                existingHobby.setGalleryImgUrl2(s3FileStorageService.getS3Url(newFileName));
                 existingHobby.setGalleryImg2_id(newFileName);
             }
             if (galleryImg3 != null && !galleryImg3.isEmpty()) {
-                fileStorageService.deleteFile(existingHobby.getGalleryImg3_id());
-                String newFileName = fileStorageService.storeFile(galleryImg3);
-                existingHobby.setGalleryImgUrl3("/api/files/" + newFileName);
+                s3FileStorageService.deleteFile(existingHobby.getGalleryImg3_id());
+                String newFileName = s3FileStorageService.storeFile(galleryImg3);
+                existingHobby.setGalleryImgUrl3(s3FileStorageService.getS3Url(newFileName));
                 existingHobby.setGalleryImg3_id(newFileName);
             }
 
