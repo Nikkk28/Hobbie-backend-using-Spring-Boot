@@ -95,7 +95,7 @@ public class HobbyController {
             hobby.setCreator(creator);
             hobby.setPrice(price);
             hobby.setContactInfo(contactInfo);
-            hobby.setProfileImgUrl("/api/files/" + profileImgName);
+            hobby.setProfileImgUrl(s3FileStorageService.getS3Url(profileImgName));
             hobby.setGalleryImgUrl1("/api/files/" + galleryImg1Name);
             hobby.setGalleryImgUrl2("/api/files/" + galleryImg2Name);
             hobby.setGalleryImgUrl3("/api/files/" + galleryImg3Name);

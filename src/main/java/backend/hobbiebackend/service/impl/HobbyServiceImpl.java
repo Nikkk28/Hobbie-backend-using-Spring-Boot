@@ -10,6 +10,7 @@ import backend.hobbiebackend.service.FileStorageService;
 import backend.hobbiebackend.service.HobbyService;
 import backend.hobbiebackend.service.LocationService;
 import backend.hobbiebackend.service.UserService;
+import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,19 +24,18 @@ public class HobbyServiceImpl implements HobbyService {
     private final CategoryService categoryService;
     private final UserService userService;
     private final LocationService locationService;
-    private final FileStorageService fileStorageService;
-
+    private final S3FileStorageServiceImpl s3FileStorageService;
     @Autowired
     public HobbyServiceImpl(HobbyRepository hobbyRepository,
                             CategoryService categoryService,
                             UserService userService,
                             LocationService locationService,
-                            FileStorageService fileStorageService) {
+                            S3FileStorageServiceImpl s3FileStorageService) {
         this.hobbyRepository = hobbyRepository;
         this.categoryService = categoryService;
         this.userService = userService;
         this.locationService = locationService;
-        this.fileStorageService = fileStorageService;
+        this.s3FileStorageService = s3FileStorageService;
     }
 
     @Override
@@ -61,10 +61,10 @@ public class HobbyServiceImpl implements HobbyService {
 
             // Delete files
             try {
-                fileStorageService.deleteFile(hobby.getProfileImg_id());
-                fileStorageService.deleteFile(hobby.getGalleryImg1_id());
-                fileStorageService.deleteFile(hobby.getGalleryImg2_id());
-                fileStorageService.deleteFile(hobby.getGalleryImg3_id());
+                s3FileStorageService.deleteFile(hobby.getProfileImg_id());
+                s3FileStorageService.deleteFile(hobby.getGalleryImg1_id());
+                s3FileStorageService.deleteFile(hobby.getGalleryImg2_id());
+                s3FileStorageService.deleteFile(hobby.getGalleryImg3_id());
             } catch (Exception e) {
                 // Log error but continue with deletion
                 System.err.println("Error deleting files: " + e.getMessage());

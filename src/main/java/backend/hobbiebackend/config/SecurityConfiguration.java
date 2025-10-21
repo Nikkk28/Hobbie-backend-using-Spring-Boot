@@ -3,6 +3,7 @@ package backend.hobbiebackend.config;
 import backend.hobbiebackend.filter.JwtFilter;
 import backend.hobbiebackend.security.HobbieUserDetailsService;
 import backend.hobbiebackend.security.OAuth2LoginSuccessHandler;
+import lombok.AllArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -28,23 +29,13 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity(securedEnabled = true, jsr250Enabled = true)
+@AllArgsConstructor
 public class SecurityConfiguration {
 
     private final HobbieUserDetailsService userDetailsService;
     private final PasswordEncoder passwordEncoder;
     private final JwtFilter jwtFilter;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
-
-    public SecurityConfiguration(
-            HobbieUserDetailsService userDetailsService,
-            PasswordEncoder passwordEncoder,
-            JwtFilter jwtAuthFilter,
-            OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler) {
-        this.userDetailsService = userDetailsService;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtFilter = jwtAuthFilter;
-        this.oAuth2LoginSuccessHandler = oAuth2LoginSuccessHandler;
-    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
