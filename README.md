@@ -20,7 +20,6 @@
 - [Configuration](#configuration)
 - [Security](#security)
 - [Testing](#testing)
-- [License](#license)
 
 ---
 
@@ -225,7 +224,7 @@ Password: topsecret
 
 ---
 
-## 📚 API Documentation
+## API Documentation
 
 ### Accessing Documentation
 
